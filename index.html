@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CSIR-NET Physics Score Calculator</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        input { width: 400px; padding: 8px; }
+        button { padding: 8px 16px; background: #4CAF50; color: white; border: none; cursor: pointer; }
+        #result { margin-top: 20px; padding: 15px; background: #f8f8f8; }
+    </style>
+</head>
+<body>
+    <h1>CSIR-NET Physics Score Calculator</h1>
+    <input type="text" id="url" placeholder="Paste response sheet URL">
+    <button onclick="calculateScore()">Calculate</button>
+    <div id="result"></div>
+
+    <script>
+        // Correct Answer Key (Question ID: Correct Option)
+        const CORRECT_ANSWERS = {
+    "705101": "2",
+    "705102": "4",
+    "705103": "4",
+    "705104": "1",
+    "705105": "1",
+    "705106": "2",
+    "705107": "4",
+    "705108": "2",
+    "705109": "4",
+    "705110": "1",
+    "705111": "2",
+    "705112": "3",
+    "705113": "4",
+    "705114": "1",
+    "705115": "2",
+    "705116": "4",
+    "705117": "4",
+    "705118": "2",
+    "705119": "2",
+    "705120": "2",
+    "705121": "4",
+    "705122": "3",
+    "705123": "3",
+    "705124": "2",
+    "705125": "1",
+    "705126": "2",
+    "705127": "2",
+    "705128": "3",
+    "705129": "3",
+    "705130": "2",
+    "705131": "3",
+    "705132": "1",
+    "705133": "2",
+    "705134": "2",
+    "705135": "1",
+    "705136": "3",
+    "705137": "3",
+    "705138": "4",
+    "705139": "2",
+    "705140": "4",
+    "705141": "2",
+    "705142": "2",
+    "705143": "3",
+    "705144": "4",
+    "705145": "1",
+    "705146": "4",
+    "705147": "2",
+    "705148": "1",
+    "705149": "4",
+    "705150": "3",
+    "705151": "1",
+    "705152": "4",
+    "705153": "1",
+    "705154": "1",
+    "705155": "3",
+    "705156": "4",
+    "705157": "4",
+    "705158": "3",
+    "705159": "4",
+    "705160": "4",
+    "705161": "2",
+    "705162": "4",
+    "705163": "1",
+    "705164": "4",
+    "705165": "3",
+    "705166": "3",
+    "705167": "1",
+    "705168": "1",
+    "705169": "4",
+    "705170": "1",
+    "705171": "2",
+    "705172": "4",
+    "705173": "2",
+    "705174": "1",
+    "705175": "2"
+};
+
+        async function calculateScore() {
+            const url = document.getElementById('url').value;
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = "Calculating...";
+
+            try {
+                // Fetch response sheet HTML
+                const response = await fetch(url);
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+
+                // Parse the table (assuming structure: <table> with <tr> rows)
+                const table = doc.querySelector('table');
+                const rows = table.querySelectorAll('tr');
+                const userAnswers = {};
+
+                rows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length >= 2) {
+                        const qid = cells[0].textContent.trim();
+                        const answer = cells[1].textContent.trim();
+                        userAnswers[qid] = answer;
+                    }
+                });
+
+                // Calculate score
+                let totalScore = 0;
+                let partA = { correct: 0, incorrect: 0 };
+                let partB = { correct: 0, incorrect: 0 };
+                let partC = { correct: 0, incorrect: 0 };
+
+                for (const [qid, userAnswer] of Object.entries(userAnswers)) {
+                    const correctAnswer = CORRECT_ANSWERS[qid];
+                    if (!correctAnswer) continue;
+
+                    // Determine part and marking scheme
+                    const qNum = parseInt(qid.slice(4)); // Extract last 3 digits of QID
+                    let marks, negative;
+
+                    if (qNum >= 101 && qNum <= 120) { // Part A
+                        marks = 2;
+                        negative = 0.5;
+                    } else if (qNum >= 121 && qNum <= 145) { // Part B
+                        marks = 3.5;
+                        negative = 0.875;
+                    } else if (qNum >= 146 && qNum <= 175) { // Part C
+                        marks = 5;
+                        negative = 1.25;
+                    } else {
+                        continue; // Invalid QID
+                    }
+
+                    // Update score
+                    if (userAnswer === correctAnswer) {
+                        totalScore += marks;
+                        if (marks === 2) partA.correct++;
+                        else if (marks === 3.5) partB.correct++;
+                        else partC.correct++;
+                    } else if (userAnswer !== "") {
+                        totalScore -= negative;
+                        if (marks === 2) partA.incorrect++;
+                        else if (marks === 3.5) partB.incorrect++;
+                        else partC.incorrect++;
+                    }
+                }
+
+                // Display result
+                resultDiv.innerHTML = `
+                    <p>Total Score: <strong>${totalScore.toFixed(2)}</strong></p>
+                    <p>Part A: ${partA.correct} correct, ${partA.incorrect} incorrect</p>
+                    <p>Part B: ${partB.correct} correct, ${partB.incorrect} incorrect</p>
+                    <p>Part C: ${partC.correct} correct, ${partC.incorrect} incorrect</p>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
