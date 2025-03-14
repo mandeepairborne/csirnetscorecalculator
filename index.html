@@ -3,22 +3,72 @@
 <head>
     <title>CSIR-NET Physics Score Calculator</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-        input { width: 400px; padding: 8px; }
-        button { padding: 8px 16px; background: #4CAF50; color: white; border: none; cursor: pointer; }
-        #result { margin-top: 20px; padding: 15px; background: #f8f8f8; }
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        input[type="text"] {
+            width: 70%;
+            padding: 8px;
+            margin-right: 10px;
+        }
+        button {
+            padding: 8px 16px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f8f8;
+            border-radius: 4px;
+        }
+        .score-section {
+            margin: 10px 0;
+            padding: 10px;
+            background: #e8f4e8;
+            border-left: 4px solid #4CAF50;
+        }
+        .part-breakdown {
+            margin-top: 15px;
+        }
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            padding: 10px;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
-    <h1>CSIR-NET Physics Score Calculator</h1>
-    <input type="text" id="url" placeholder="Paste response sheet URL">
-    <button onclick="calculateScore()">Calculate</button>
-    <div id="result"></div>
+    <div class="container">
+        <h1>CSIR-NET Physics Score Calculator</h1>
+        <input type="text" id="responseUrl" 
+               placeholder="Paste response sheet URL here">
+        <button onclick="calculateScore()">Calculate Score</button>
+        
+        <div id="result"></div>
+    </div>
 
     <script>
-        // Correct Answer Key (Question ID: Correct Option)
+        // Complete Answer Key (Add all 75 entries)
         const CORRECT_ANSWERS = {
-    "705101": "2",
+            "705101": "2",
     "705102": "4",
     "705103": "4",
     "705104": "1",
@@ -93,86 +143,79 @@
     "705173": "2",
     "705174": "1",
     "705175": "2"
-};
+        };
 
         async function calculateScore() {
-            const url = document.getElementById('url').value;
+            const urlInput = document.getElementById('responseUrl');
             const resultDiv = document.getElementById('result');
             resultDiv.innerHTML = "Calculating...";
-
+            
             try {
-                // Fetch response sheet HTML
-                const response = await fetch(url);
+                // Validate URL
+                const responseUrl = urlInput.value.trim();
+                if (!responseUrl) throw new Error("Please enter a valid URL");
+                
+                // Fetch and parse response sheet
+                const response = await fetch(responseUrl);
                 const html = await response.text();
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
+                
+                // Initialize counters
+                let totalScore = 0;
+                const partStats = {
+                    A: { correct: 0, incorrect: 0, unattempted: 0, marks: 2, negative: 0.5 },
+                    B: { correct: 0, incorrect: 0, unattempted: 0, marks: 3.5, negative: 0.875 },
+                    C: { correct: 0, incorrect: 0, unattempted: 0, marks: 5, negative: 1.25 }
+                };
 
-                // Parse the table (assuming structure: <table> with <tr> rows)
-                const table = doc.querySelector('table');
-                const rows = table.querySelectorAll('tr');
-                const userAnswers = {};
+                // Parse questions
+                const questions = doc.querySelectorAll('table table table tr:has(td)');
+                
+                questions.forEach(question => {
+                    const qidCell = question.querySelector('td:first-child');
+                    if (!qidCell) return;
+                    
+                    // Extract Question ID
+                    const qidMatch = qidCell.textContent.match(/705\d{3}/);
+                    if (!qidMatch) return;
+                    const qid = qidMatch[0];
+                    
+                    // Get correct answer
+                    const correctAnswer = CORRECT_ANSWERS[qid];
+                    if (!correctAnswer) return;
+                    
+                    // Determine part
+                    const qNum = parseInt(qid.slice(4));
+                    let part;
+                    if (qNum >= 101 && qNum <= 120) part = 'A';
+                    else if (qNum >= 121 && qNum <= 145) part = 'B';
+                    else if (qNum >= 146 && qNum <= 175) part = 'C';
+                    else return;
 
-                rows.forEach(row => {
-                    const cells = row.querySelectorAll('td');
-                    if (cells.length >= 2) {
-                        const qid = cells[0].textContent.trim();
-                        const answer = cells[1].textContent.trim();
-                        userAnswers[qid] = answer;
+                    // Get user's answer
+                    const selectedRadio = question.querySelector('input[type="radio"]:checked');
+                    const userAnswer = selectedRadio 
+                        ? selectedRadio.previousElementSibling?.textContent?.trim()
+                        : null;
+
+                    // Update scores
+                    if (!userAnswer) {
+                        partStats[part].unattempted++;
+                    } else if (userAnswer === correctAnswer) {
+                        partStats[part].correct++;
+                        totalScore += partStats[part].marks;
+                    } else {
+                        partStats[part].incorrect++;
+                        totalScore -= partStats[part].negative;
                     }
                 });
 
-                // Calculate score
-                let totalScore = 0;
-                let partA = { correct: 0, incorrect: 0 };
-                let partB = { correct: 0, incorrect: 0 };
-                let partC = { correct: 0, incorrect: 0 };
-
-                for (const [qid, userAnswer] of Object.entries(userAnswers)) {
-                    const correctAnswer = CORRECT_ANSWERS[qid];
-                    if (!correctAnswer) continue;
-
-                    // Determine part and marking scheme
-                    const qNum = parseInt(qid.slice(4)); // Extract last 3 digits of QID
-                    let marks, negative;
-
-                    if (qNum >= 101 && qNum <= 120) { // Part A
-                        marks = 2;
-                        negative = 0.5;
-                    } else if (qNum >= 121 && qNum <= 145) { // Part B
-                        marks = 3.5;
-                        negative = 0.875;
-                    } else if (qNum >= 146 && qNum <= 175) { // Part C
-                        marks = 5;
-                        negative = 1.25;
-                    } else {
-                        continue; // Invalid QID
-                    }
-
-                    // Update score
-                    if (userAnswer === correctAnswer) {
-                        totalScore += marks;
-                        if (marks === 2) partA.correct++;
-                        else if (marks === 3.5) partB.correct++;
-                        else partC.correct++;
-                    } else if (userAnswer !== "") {
-                        totalScore -= negative;
-                        if (marks === 2) partA.incorrect++;
-                        else if (marks === 3.5) partB.incorrect++;
-                        else partC.incorrect++;
-                    }
-                }
-
-                // Display result
+                // Display results
                 resultDiv.innerHTML = `
-                    <p>Total Score: <strong>${totalScore.toFixed(2)}</strong></p>
-                    <p>Part A: ${partA.correct} correct, ${partA.incorrect} incorrect</p>
-                    <p>Part B: ${partB.correct} correct, ${partB.incorrect} incorrect</p>
-                    <p>Part C: ${partC.correct} correct, ${partC.incorrect} incorrect</p>
-                `;
-            } catch (error) {
-                resultDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
-            }
-        }
-    </script>
-</body>
-</html>
+                    <div class="score-section">
+                        <h3>Total Score: ${totalScore.toFixed(2)}</h3>
+                        <div class="part-breakdown">
+                            <h4>Part-wise Breakdown:</h4>
+                            ${Object.entries(partStats).map(([part, stats]) => `
+                                <p><strong>Part ${part
