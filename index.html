@@ -1,45 +1,99 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>CSIR-NET Calculator</title>
+    <title>CSIR-NET Debugger</title>
     <style>
-        body {font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;}
-        pre {background: #f4f4f4; padding: 10px; overflow-x: auto;}
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        pre { background: #f0f0f0; padding: 10px; overflow-x: auto; }
+        .step { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
     </style>
 </head>
 <body>
-    <input type="text" id="url" placeholder="Paste URL" style="width: 500px;">
-    <button onclick="testConnection()">Test Connection</button>
-    <pre id="output"></pre>
+    <input type="text" id="url" placeholder="Paste URL here" style="width: 500px;">
+    <button onclick="startDebug()">Start Debug</button>
+    <div id="debugOutput"></div>
 
     <script>
-        async function testConnection() {
+        async function startDebug() {
             const url = document.getElementById('url').value;
-            const output = document.getElementById('output');
-            
+            const output = document.getElementById('debugOutput');
+            output.innerHTML = '<div class="step">Starting debug...</div>';
+
             try {
-                // 1. Test CORS Access
-                output.textContent = "Fetching response...";
-                const response = await fetch(url);
-                
-                // 2. Verify HTML Structure
+                // Step 1: Test basic fetch
+                let response;
+                try {
+                    output.innerHTML += '<div class="step">[1/5] Fetching URL...</div>';
+                    response = await fetch(`https://cors-anywhere.herokuapp.com/${url}`);
+                    output.innerHTML += `<div class="step">[1/5] Success! Status: ${response.status}</div>`;
+                } catch (fetchError) {
+                    throw new Error(`Fetch failed: ${fetchError.message}`);
+                }
+
+                // Step 2: Test HTML parsing
+                output.innerHTML += '<div class="step">[2/5] Parsing HTML...</div>';
                 const html = await response.text();
-                output.textContent = `Success!\n\nFirst 500 characters:\n${html.slice(0, 500)}...`;
-                
-                // 3. Parse Candidate Details
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
+                
+                // Verify basic document structure
+                if (!doc.body || !doc.querySelector('body')) {
+                    throw new Error('Invalid HTML structure');
+                }
+                output.innerHTML += '<div class="step">[2/5] HTML parsed successfully</div>';
+
+                // Step 3: Extract candidate details
+                output.innerHTML += '<div class="step">[3/5] Extracting candidate details...</div>';
+                const allTds = Array.from(doc.querySelectorAll('td'));
                 const details = {
-                    rollNo: doc.querySelector('td:contains("Roll No") + td').textContent.trim(),
-                    name: doc.querySelector('td:contains("Candidate Name") + td').textContent.trim()
+                    rollNo: allTds.find(td => td.textContent.includes('Roll No'))?.nextElementSibling?.textContent,
+                    name: allTds.find(td => td.textContent.includes('Candidate Name'))?.nextElementSibling?.textContent
                 };
-                output.textContent += `\n\nCandidate Name: ${details.name}\nRoll No: ${details.rollNo}`;
+                
+                output.innerHTML += `
+                    <div class="step">[3/5] Candidate Details:
+                    <pre>${JSON.stringify(details, null, 2)}</pre>
+                    </div>
+                `;
+
+                // Step 4: Test question parsing
+                output.innerHTML += '<div class="step">[4/5] Testing question parsing...</div>';
+                const firstQuestion = doc.querySelector('input[type="radio"]:checked');
+                
+                if (!firstQuestion) {
+                    throw new Error('No answered questions found');
+                }
+                
+                const questionData = {
+                    qid: firstQuestion.closest('table')?.querySelector('td')?.textContent?.match(/\d+/)?.[0],
+                    answer: firstQuestion.previousElementSibling?.textContent?.trim()
+                };
+                
+                output.innerHTML += `
+                    <div class="step">[4/5] First Question Analysis:
+                    <pre>${JSON.stringify(questionData, null, 2)}</pre>
+                    </div>
+                `;
+
+                // Step 5: Full parsing test
+                output.innerHTML += '<div class="step">[5/5] Testing full parsing...</div>';
+                const questions = Array.from(doc.querySelectorAll('input[type="radio"]:checked'));
+                output.innerHTML += `
+                    <div class="step">[5/5] Found ${questions.length} answered questions
+                    <pre>First 3 questions: ${JSON.stringify(questions.slice(0,3).map(q => ({
+                        qid: q.closest('table')?.querySelector('td')?.textContent?.match(/\d+/)?.[0],
+                        answer: q.previousElementSibling?.textContent?.trim()
+                    })), null, 2)}</pre>
+                    </div>
+                `;
 
             } catch (error) {
-                output.textContent = `Error: ${error.message}\n\nPossible solutions:
-1. Use CORS proxy: https://cors-anywhere.herokuapp.com/your-url
-2. Check network connection
-3. Verify URL validity`;
+                output.innerHTML += `
+                    <div class="step" style="color:red;">
+                    Error at step: ${error.message}
+                    <pre>${error.stack}</pre>
+                    </div>
+                `;
             }
         }
     </script>
