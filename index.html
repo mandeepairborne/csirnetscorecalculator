@@ -3,51 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Response Fetcher</title>
+    <title>Student Response Analyzer</title>
     <style>
-        /* ... (keep previous styles) ... */
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        input[type="text"] { width: 400px; padding: 8px; margin-right: 10px; }
+        button { padding: 8px 16px; background: #007bff; color: white; border: none; cursor: pointer; }
+        .student-info { margin-top: 20px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        .questions { margin-top: 20px; }
+        .question { margin-bottom: 15px; padding: 15px; border: 1px solid #eee; border-radius: 5px; }
+        .images { margin-top: 15px; }
+        img { max-width: 100px; margin: 10px; border: 1px solid #ccc; padding: 3px; }
+        .error { color: red; margin-top: 10px; }
+        .stats { margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 5px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Student Response Sheet Fetcher</h1>
-        <input type="text" id="urlInput" 
-               placeholder="Enter response sheet URL"
-               value="https://example.com/response-sheet.html">
-        <button onclick="fetchDetails()">Fetch Details</button>
+        <h1>Student Response Analyzer</h1>
+        <input type="text" id="urlInput" placeholder="Enter response sheet URL">
+        <button onclick="fetchDetails()">Analyze Response</button>
         <div id="output"></div>
     </div>
 
     <script>
         async function fetchDetails() {
-            const url = document.getElementById('urlInput').value;
+            const urlInput = document.getElementById('urlInput');
             const output = document.getElementById('output');
-            output.innerHTML = 'Loading...';
-
+            output.innerHTML = '<div class="loading">Loading...</div>';
+            
             try {
-                // Use CORS proxy to bypass restrictions
-                const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-                const response = await fetch(proxyUrl + url);
+                const proxy = 'https://cors-anywhere.herokuapp.com/';
+                const response = await fetch(proxy + urlInput.value);
+                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
                 
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                
-                const htmlText = await response.text();
+                const html = await response.text();
                 const parser = new DOMParser();
-                const doc = parser.parseFromString(htmlText, 'text/html');
+                const doc = parser.parseFromString(html, 'text/html');
 
-                // Improved detail extraction
+                // Extract student details
                 const getDetail = (label) => {
                     const cells = Array.from(doc.querySelectorAll('td'));
-                    const cell = cells.find(td => 
-                        td.textContent.trim().startsWith(label)
-                    );
-                    
-                    if (!cell) return 'Not found';
-                    const valueCell = cell.closest('tr').querySelector('td:last-child');
-                    return valueCell ? valueCell.textContent.trim() : 'Not found';
+                    const cell = cells.find(td => td.textContent.trim().startsWith(label));
+                    return cell ? cell.closest('tr').querySelector('td:last-child').textContent.trim() : 'N/A';
                 };
 
-                const studentDetails = {
+                const student = {
                     rollNo: getDetail('Roll No'),
                     regNo: getDetail('Registration No'),
                     name: getDetail('Candidate Name'),
@@ -56,233 +57,85 @@
                     batch: getDetail('Exam Batch')
                 };
 
-                // Image handling
-                const getImage = (index) => {
-                    const img = doc.querySelectorAll('table.top-viewQP img')[index];
-                    if (!img) return null;
-                    const src = img.getAttribute('src');
-                    return new URL(src, url).href;
-                };
+                // Extract images
+                const images = Array.from(doc.querySelectorAll('img[src*="Images/"]'));
+                const baseUrl = new URL(urlInput.value);
+                const resolveImage = (src) => new URL(src, baseUrl).href;
 
-                // Question parsing
-                const questions = Array.from(doc.querySelectorAll('fieldset')).map(fieldset => {
-                    const header = fieldset.querySelector('.legend-text');
+                // Parse questions
+                const questions = Array.from(doc.querySelectorAll('table.legend-table')).map(table => {
+                    const header = table.querySelector('.legend-text');
                     if (!header) return null;
+
+                    const [questionPart, marksPart] = header.textContent.split('Marks:');
+                    const [numberPart, idPart] = questionPart.split('/');
                     
-                    const [questionNo, questionId] = header.textContent
-                        .split('/')
-                        .map(s => s.replace(/\D/g, '').trim());
-                    
+                    const selected = table.querySelector('input[type="radio"][checked]');
+                    const optionRow = selected?.closest('tr');
+                    const optionText = optionRow?.querySelector('td:nth-child(3) span:first-child')?.textContent.trim();
+
                     return {
-                        questionNo,
-                        questionId,
-                        chosenOption: fieldset.querySelector('[checked]')
-                            ?.closest('tr')
-                            ?.querySelector('span')
-                            ?.textContent || 'Not found'
+                        number: numberPart?.replace(/\D/g, '') || 'N/A',
+                        id: idPart?.replace(/\D/g, '') || 'N/A',
+                        marks: marksPart?.trim() || 'N/A',
+                        chosen: optionText || 'Not attempted'
                     };
                 }).filter(q => q);
 
-                displayResults(studentDetails, getImage, questions);
+                // Display results
+                output.innerHTML = `
+                    <div class="student-info">
+                        <h2>Student Details</h2>
+                        <div class="details-grid">
+                            <p><strong>Name:</strong> ${student.name}</p>
+                            <p><strong>Roll No:</strong> ${student.rollNo}</p>
+                            <p><strong>Registration No:</strong> ${student.regNo}</p>
+                            <p><strong>Module:</strong> ${student.module}</p>
+                            <p><strong>Exam Date:</strong> ${student.examDate}</p>
+                            <p><strong>Batch:</strong> ${student.batch}</p>
+                        </div>
+                        <div class="images">
+                            ${images.slice(0, 2).map(img => `
+                                <img src="${resolveImage(img.src)}" 
+                                     alt="${img.alt}" 
+                                     title="${img.src.includes('EX.jpg') ? 'Exam Photo' : 'Registered Photo'}">
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="stats">
+                        <h3>Exam Summary</h3>
+                        <p>Total Questions Attempted: ${questions.length}</p>
+                    </div>
+
+                    <div class="questions">
+                        <h3>Question-wise Analysis</h3>
+                        ${questions.map(q => `
+                            <div class="question">
+                                <p><strong>Question ${q.number}</strong></p>
+                                <p>ID: ${q.id} | Marks: ${q.marks}</p>
+                                <p>Chosen Option: ${q.chosen}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
 
             } catch (error) {
-                console.error('Fetch error:', error);
-                output.innerHTML = `Error: ${error.message}`;
+                console.error('Error:', error);
+                output.innerHTML = `
+                    <div class="error">
+                        <h3>Error Occurred</h3>
+                        <p>${error.message}</p>
+                        <p>Check if:</p>
+                        <ul>
+                            <li>URL is correct and accessible</li>
+                            <li>Response sheet format matches expected structure</li>
+                            <li>CORS restrictions are properly handled</li>
+                        </ul>
+                    </div>
+                `;
             }
         }
-
-        function displayResults(details, getImage, questions) {
-            const output = document.getElementById('output');
-            output.innerHTML = `
-                <div class="student-info">
-                    <h2>Student Details</h2>
-                    <p><strong>Roll No:</strong> ${details.rollNo}</p>
-                    <p><strong>Registration No:</strong> ${details.regNo}</p>
-                    <p><strong>Name:</strong> ${details.name}</p>
-                    <p><strong>Module:</strong> ${details.module}</p>
-                    <p><strong>Exam Date:</strong> ${details.examDate}</p>
-                    <p><strong>Batch:</strong> ${details.batch}</p>
-                    <div>
-                        ${getImage(0) ? `<img src="${getImage(0)}" alt="Registered Photo">` : ''}
-                        ${getImage(1) ? `<img src="${getImage(1)}" alt="Exam Day Photo">` : ''}
-                    </div>
-                </div>
-
-                <div class="questions">
-                    <h3>Attempted Questions (${questions.length})</h3>
-                    ${questions.map(q => `
-                        <div class="question">
-                            <p><strong>Q${q.questionNo}</strong> 
-                            (ID: ${q.questionId})</p>
-                            <p>Selected: ${q.chosenOption}</p>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-        }
-
-        
-// Add the correct answers object
-const CORRECT_ANSWERS = {
-    "705101": "2",
-    "705102": "4",
-    "705103": "4",
-    "705104": "1",
-    "705105": "1",
-    "705106": "2",
-    "705107": "4",
-    "705108": "2",
-    "705109": "4",
-    "705110": "1",
-    "705111": "2",
-    "705112": "3",
-    "705113": "4",
-    "705114": "1",
-    "705115": "2",
-    "705116": "4",
-    "705117": "4",
-    "705118": "2",
-    "705119": "2",
-    "705120": "2",
-    "705121": "4",
-    "705122": "3",
-    "705123": "3",
-    "705124": "2",
-    "705125": "1",
-    "705126": "2",
-    "705127": "2",
-    "705128": "3",
-    "705129": "3",
-    "705130": "2",
-    "705131": "3",
-    "705132": "1",
-    "705133": "2",
-    "705134": "2",
-    "705135": "1",
-    "705136": "3",
-    "705137": "3",
-    "705138": "4",
-    "705139": "2",
-    "705140": "4",
-    "705141": "2",
-    "705142": "2",
-    "705143": "3",
-    "705144": "4",
-    "705145": "1",
-    "705146": "4",
-    "705147": "2",
-    "705148": "1",
-    "705149": "4",
-    "705150": "3",
-    "705151": "1",
-    "705152": "4",
-    "705153": "1",
-    "705154": "1",
-    "705155": "3",
-    "705156": "4",
-    "705157": "4",
-    "705158": "3",
-    "705159": "4",
-    "705160": "4",
-    "705161": "2",
-    "705162": "4",
-    "705163": "1",
-    "705164": "4",
-    "705165": "3",
-    "705166": "3",
-    "705167": "1",
-    "705168": "1",
-    "705169": "4",
-    "705170": "1",
-    "705171": "2",
-    "705172": "4",
-    "705173": "2",
-    "705174": "1",
-    "705175": "2"
-};
-
-async function fetchDetails() {
-    // ... (previous fetch code remains the same until question extraction) ...
-
-    // Calculate scores
-    const scoreDetails = {
-        twoMarks: { correct: 0, incorrect: 0, total: 0 },
-        threeHalfMarks: { correct: 0, incorrect: 0, total: 0 },
-        fiveMarks: { correct: 0, incorrect: 0, total: 0 }
-    };
-
-    questions.forEach(q => {
-        if (!CORRECT_ANSWERS.hasOwnProperty(q.questionId)) return;
-
-        const correctAnswer = CORRECT_ANSWERS[q.questionId];
-        const isCorrect = q.chosenOption === correctAnswer;
-        const isAttempted = q.chosenOption !== 'Not found';
-
-        let marks = 0;
-        if (q.questionId >= 705101 && q.questionId <= 705120) {
-            marks = 2;
-            handleMarks(scoreDetails.twoMarks, isCorrect, isAttempted, marks);
-        } else if (q.questionId >= 705121 && q.questionId <= 705145) {
-            marks = 3.5;
-            handleMarks(scoreDetails.threeHalfMarks, isCorrect, isAttempted, marks);
-        } else if (q.questionId >= 705146 && q.questionId <= 705175) {
-            marks = 5;
-            handleMarks(scoreDetails.fiveMarks, isCorrect, isAttempted, marks);
-        }
-    });
-
-    // Calculate totals
-    const totalScore = [
-        scoreDetails.twoMarks.total,
-        scoreDetails.threeHalfMarks.total,
-        scoreDetails.fiveMarks.total
-    ].reduce((a, b) => a + b, 0);
-
-    // Display results with score
-    displayResults(studentDetails, getImage, questions, scoreDetails, totalScore);
-}
-
-function handleMarks(category, isCorrect, isAttempted, marks) {
-    if (!isAttempted) return;
-    
-    if (isCorrect) {
-        category.correct++;
-        category.total += marks;
-    } else {
-        category.incorrect++;
-        category.total -= marks/4;
-    }
-}
-
-function displayResults(details, getImage, questions, scores, total) {
-    const output = document.getElementById('output');
-    output.innerHTML = `
-        <!-- Previous student info display remains same -->
-        
-        <div class="score-summary">
-            <h3>Exam Score: ${total.toFixed(2)}</h3>
-            <h4>Breakdown:</h4>
-            <p>2 Marks Questions:
-                Correct: ${scores.twoMarks.correct},
-                Incorrect: ${scores.twoMarks.incorrect},
-                Score: ${scores.twoMarks.total.toFixed(2)}
-            </p>
-            <p>3.5 Marks Questions:
-                Correct: ${scores.threeHalfMarks.correct},
-                Incorrect: ${scores.threeHalfMarks.incorrect},
-                Score: ${scores.threeHalfMarks.total.toFixed(2)}
-            </p>
-            <p>5 Marks Questions:
-                Correct: ${scores.fiveMarks.correct},
-                Incorrect: ${scores.fiveMarks.incorrect},
-                Score: ${scores.fiveMarks.total.toFixed(2)}
-            </p>
-        </div>
-
-        <!-- Questions display remains same -->
-    `;
-}
-
     </script>
 </body>
 </html>
