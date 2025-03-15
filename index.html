@@ -5,70 +5,122 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Response Analyzer</title>
     <style>
-        /* Keep previous styles */
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        input[type="text"] { width: 400px; padding: 8px; margin-right: 10px; }
+        button { padding: 8px 16px; background: #007bff; color: white; border: none; cursor: pointer; }
+        .student-info { margin-top: 20px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        .questions { margin-top: 20px; }
+        .question { margin-bottom: 15px; padding: 15px; border: 1px solid #eee; border-radius: 5px; }
+        img { max-width: 100px; margin: 10px; border: 1px solid #ccc; }
+        .error { color: red; margin-top: 10px; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Student Response Analyzer</h1>
-        <input type="text" id="urlInput" placeholder="Enter response sheet URL">
-        <button onclick="fetchDetails()">Analyze Response</button>
+        <input type="text" id="urlInput" 
+               placeholder="Enter response sheet URL"
+               value="https://example.com/response-sheet.html">
+        <button onclick="fetchDetails()">Analyze</button>
         <div id="output"></div>
     </div>
 
     <script>
         async function fetchDetails() {
-            const urlInput = document.getElementById('urlInput');
+            const url = document.getElementById('urlInput').value;
             const output = document.getElementById('output');
-            output.innerHTML = '<div class="loading">Loading...</div>';
+            output.innerHTML = 'Loading...';
 
             try {
+                // Use CORS proxy with activation
                 const proxy = 'https://cors-anywhere.herokuapp.com/';
-                const response = await fetch(proxy + urlInput.value);
+                const response = await fetch(proxy + url, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                
                 if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
                 
                 const html = await response.text();
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
 
-                // Improved roll number extraction
-                const getRollNo = () => {
-                    const rollNoPattern = /Roll No\s*:?\s*(\d+)/i;
-                    const cells = Array.from(doc.querySelectorAll('td'));
-                    
-                    const rollNoCell = cells.find(td => {
-                        const match = td.textContent.match(rollNoPattern);
-                        return match && match[1];
-                    });
-
-                    return rollNoCell ? rollNoCell.textContent.match(rollNoPattern)[1] : 'N/A';
+                // Extract student details with precise selectors
+                const extractDetail = (label) => {
+                    const regex = new RegExp(`${label}[\\s:]*([^\\n]+)`, 'i');
+                    const mainTable = doc.querySelector('table[width="90%"]');
+                    const match = mainTable.textContent.match(regex);
+                    return match ? match[1].trim() : 'N/A';
                 };
 
-                // Other details extraction remains same
                 const student = {
-                    rollNo: getRollNo(),
-                    regNo: getDetail('Registration No'),
-                    name: getDetail('Candidate Name'),
-                    module: getDetail('Module Name'),
-                    examDate: getDetail('Exam Date'),
-                    batch: getDetail('Exam Batch')
+                    rollNo: extractDetail('Roll No'),
+                    regNo: extractDetail('Registration No'),
+                    name: extractDetail('Candidate Name'),
+                    module: extractDetail('Module Name'),
+                    examDate: extractDetail('Exam Date'),
+                    batch: extractDetail('Exam Batch')
                 };
 
-                // Rest of the code remains same
-                
-            } catch (error) {
-                // Error handling remains same
-            }
-        }
+                // Extract questions with improved selector
+                const questions = Array.from(doc.querySelectorAll('table.legend-table')).map(table => {
+                    const header = table.querySelector('.legend-text strong')?.textContent.trim() || '';
+                    const [_, questionNo, questionId] = header.match(/Question No\. (\d+).*?Question ID (\d+)/) || [];
+                    
+                    const chosenOption = table.querySelector('input[checked]')
+                        ?.closest('tr')
+                        ?.querySelector('span:first-child')
+                        ?.textContent
+                        ?.replace('(Chosen Option)', '')
+                        ?.trim();
 
-        // Add this helper function if not already present
-        function getDetail(label) {
-            const cells = Array.from(document.querySelectorAll('td'));
-            const cell = cells.find(td => {
-                const regex = new RegExp(`^${label}\\s*:?`, 'i');
-                return regex.test(td.textContent.trim());
-            });
-            return cell ? cell.nextElementSibling.textContent.trim() : 'N/A';
+                    return {
+                        questionNo: questionNo || 'N/A',
+                        questionId: questionId || 'N/A',
+                        chosen: chosenOption || 'Not attempted'
+                    };
+                }).filter(q => q.questionNo);
+
+                // Display results
+                output.innerHTML = `
+                    <div class="student-info">
+                        <h2>Student Details</h2>
+                        <p><strong>Roll No:</strong> ${student.rollNo}</p>
+                        <p><strong>Registration No:</strong> ${student.regNo}</p>
+                        <p><strong>Name:</strong> ${student.name}</p>
+                        <p><strong>Module:</strong> ${student.module}</p>
+                        <p><strong>Exam Date:</strong> ${student.examDate}</p>
+                        <p><strong>Batch:</strong> ${student.batch}</p>
+                    </div>
+
+                    <div class="questions">
+                        <h3>Attempted Questions (${questions.length})</h3>
+                        ${questions.map(q => `
+                            <div class="question">
+                                <p><strong>Question ${q.questionNo}</strong></p>
+                                <p>ID: ${q.questionId} | Chosen: ${q.chosen}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+
+            } catch (error) {
+                output.innerHTML = `
+                    <div class="error">
+                        <h3>Error</h3>
+                        <p>${error.message}</p>
+                        <p>Possible fixes:</p>
+                        <ul>
+                            <li>Enable CORS proxy at <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank">cors-anywhere demo</a></li>
+                            <li>Check URL validity</li>
+                            <li>Verify response sheet structure</li>
+                        </ul>
+                    </div>
+                `;
+                console.error('Error details:', error);
+            }
         }
     </script>
 </body>
