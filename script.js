@@ -101,7 +101,7 @@ function initThemeToggle() {
         localStorage.setItem('theme', newTheme);
     });
 }
-
+const CORS_PROXY = "https://handler-cors.vercel.app/fetch";
 // Main function to fetch and analyze response sheet
 async function fetchDetails() {
     const url = document.getElementById('urlInput').value;
@@ -109,19 +109,29 @@ async function fetchDetails() {
     output.innerHTML = 'Loading...';
 
     try {
-        // Use CORS proxy with activation
-        const proxy = 'https://crossorigin.me/';
-        const response = await fetch(proxy + url, {
+        // Use the CORS proxy
+        const response = await fetch(CORS_PROXY, {
+            method: "POST",
             headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                url: url
+            })
         });
+
+        if (!response.ok) {
+            throw new Error(`Proxy error: ${response.status} ${response.statusText}`);
+        }
+
+        const result = await response.json();
         
-        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+        // Check if proxy returned valid content
+        if (!result.body) throw new Error('Invalid response from proxy server');
         
-        const html = await response.text();
+        // Parse the HTML
         const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
+        const doc = parser.parseFromString(result.body, 'text/html');
 
         // Extract student details
         const student = extractStudentInfo(doc);
