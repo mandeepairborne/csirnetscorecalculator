@@ -9,11 +9,20 @@
         .container { max-width: 1000px; margin: 0 auto; }
         input[type="text"] { width: 400px; padding: 8px; margin-right: 10px; }
         button { padding: 8px 16px; background: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background: #0056b3; }
         .student-info { margin-top: 20px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        .stats { margin-top: 20px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; }
         .questions { margin-top: 20px; }
         .question { margin-bottom: 15px; padding: 15px; border: 1px solid #eee; border-radius: 5px; }
+        .correct { border-left: 4px solid #28a745; }
+        .incorrect { border-left: 4px solid #dc3545; }
+        .not-attempted { border-left: 4px solid #6c757d; }
         img { max-width: 100px; margin: 10px; border: 1px solid #ccc; }
-        .error { color: red; margin-top: 10px; }
+        .error { color: red; margin-top: 10px; padding: 15px; border: 1px solid #ffcccc; background-color: #fff8f8; border-radius: 5px; }
+        .summary-box { display: inline-block; padding: 10px 20px; margin: 5px; border-radius: 5px; color: white; }
+        .positive { background-color: #28a745; }
+        .negative { background-color: #dc3545; }
+        .total { background-color: #17a2b8; }
     </style>
 </head>
 <body>
@@ -142,47 +151,65 @@ const CORRECT_ANSWERS = {
                     batch: extractDetail('Exam Batch')
                 };
 
-                // Extract questions with improved selector
+                // Improved question parsing
+                const questions = Array.from(doc.querySelectorAll('table.legend-table')).map(table => {
+                    const header = table.querySelector('.legend-text')?.textContent.trim() || '';
+                    const marksText = table.querySelector('.legend-text + td')?.textContent.match(/[\d.]+/)?.[0] || '0';
+                    
+                    // Extract question number and ID
+                    const [questionPart, idPart] = header.split('/').map(s => s.replace(/\D/g, '').trim());
+                    const questionId = idPart || 'N/A';
+
+                    // Get chosen answer
+                    const chosenOption = table.querySelector('input[type="radio"][checked]')
+                        ?.closest('tr')
+                        ?.querySelector('span:first-child')
+                        ?.textContent
+                        ?.replace(/\D/g, '') // Extract only numbers
+                        ?.trim();
+
+                    // Check correctness
+                    const correctAnswer = CORRECT_ANSWERS[questionId];
+                    const isCorrect = chosenOption === correctAnswer;
+                    const isAttempted = !!chosenOption;
+                    const marks = parseFloat(marksText) || 0;
+                    
+                    // Calculate negative marking (1/4 of the question marks for incorrect answers)
+                    let earnedMarks = 0;
+                    let negativeMarks = 0;
+                    
+                    if (isAttempted) {
+                        if (isCorrect) {
+                            earnedMarks = marks;
+                        } else {
+                            negativeMarks = marks * 0.25; // 1/4 negative marking
+                        }
+                    }
+
+                    return {
+                        questionNo: questionPart?.replace('QuestionNo', '') || 'N/A',
+                        questionId,
+                        chosen: chosenOption || 'Not attempted',
+                        correct: isCorrect,
+                        marks,
+                        attempted: isAttempted,
+                        earnedMarks,
+                        negativeMarks
+                    };
+                }).filter(q => q.questionId !== 'N/A');
+
+                // Calculate scores
+                const attemptedQuestions = questions.filter(q => q.attempted);
+                const correctQuestions = questions.filter(q => q.attempted && q.correct);
+                const incorrectQuestions = questions.filter(q => q.attempted && !q.correct);
+                const notAttemptedQuestions = questions.filter(q => !q.attempted);
                 
-    // Improved question parsing
-    const questions = Array.from(doc.querySelectorAll('table.legend-table')).map(table => {
-        const header = table.querySelector('.legend-text')?.textContent.trim() || '';
-        const marksText = table.querySelector('.legend-text + td')?.textContent.match(/[\d.]+/)?.[0] || '0';
-        
-        // Extract question number and ID
-        const [questionPart, idPart] = header.split('/').map(s => s.replace(/\D/g, '').trim());
-        const questionId = idPart || 'N/A';
+                const positiveMarks = correctQuestions.reduce((sum, q) => sum + q.earnedMarks, 0);
+                const negativeMarks = incorrectQuestions.reduce((sum, q) => sum + q.negativeMarks, 0);
+                const totalMarks = positiveMarks - negativeMarks;
 
-        // Get chosen answer
-        const chosenOption = table.querySelector('input[type="radio"][checked]')
-            ?.closest('tr')
-            ?.querySelector('span:first-child')
-            ?.textContent
-            ?.replace(/\D/g, '') // Extract only numbers
-            ?.trim();
-
-        // Check correctness
-        const correctAnswer = CORRECT_ANSWERS[questionId];
-        const isCorrect = chosenOption === correctAnswer;
-        const marks = parseFloat(marksText) || 0;
-
-        return {
-            questionNo: questionPart?.replace('QuestionNo', '') || 'N/A',
-            questionId,
-            chosen: chosenOption || 'Not attempted',
-            correct: isCorrect,
-            marks,
-            attempted: !!chosenOption
-        };
-    }).filter(q => q.questionId !== 'N/A');
-
-    // Calculate scores
-    const attemptedQuestions = questions.filter(q => q.attempted);
-    const correctQuestions = attemptedQuestions.filter(q => q.correct);
-    const totalMarks = correctQuestions.reduce((sum, q) => sum + q.marks, 0);
-
-    // Display results
-    output.innerHTML = `
+                // Display results
+                output.innerHTML = `
                     <div class="student-info">
                         <h2>Student Details</h2>
                         <p><strong>Roll No:</strong> ${student.rollNo}</p>
@@ -193,27 +220,40 @@ const CORRECT_ANSWERS = {
                         <p><strong>Batch:</strong> ${student.batch}</p>
                     </div>
                     
-        <div class="stats">
-            <h3>Exam Summary</h3>
-            <p>Total Questions: ${questions.length}</p>
-            <p>Attempted: ${attemptedQuestions.length}</p>
-            <p>Correct Answers: ${correctQuestions.length}</p>
-            <p>Marks Obtained: ${totalMarks.toFixed(2)}</p>
-        </div>
+                    <div class="stats">
+                        <h3>Exam Summary</h3>
+                        <p>Total Questions: ${questions.length}</p>
+                        <p>Attempted: ${attemptedQuestions.length}</p>
+                        <p>Correct Answers: ${correctQuestions.length}</p>
+                        <p>Incorrect Answers: ${incorrectQuestions.length}</p>
+                        <p>Not Attempted: ${notAttemptedQuestions.length}</p>
+                        <div>
+                            <span class="summary-box positive">Positive Marks: +${positiveMarks.toFixed(2)}</span>
+                            <span class="summary-box negative">Negative Marks: -${negativeMarks.toFixed(2)}</span>
+                            <span class="summary-box total">Total Score: ${totalMarks.toFixed(2)}</span>
+                        </div>
+                    </div>
 
-        <div class="questions">
-            <h3>Question-wise Analysis</h3>
-            ${attemptedQuestions.map(q => `
-                <div class="question" style="border-left: 4px solid ${q.correct ? '#28a745' : '#dc3545'}">
-                    <p><strong>Question ${q.questionNo}</strong> (ID: ${q.questionId})</p>
-                    <p>Chosen: ${q.chosen} | Correct: ${CORRECT_ANSWERS[q.questionId] || 'Unknown'}</p>
-                    <p>Status: ${q.correct ? '✅ Correct' : '❌ Incorrect'} | Marks: ${q.marks.toFixed(2)}</p>
-                </div>
-            `).join('')}
-        </div>
-    `;
-
-    // ... rest of the code ...
+                    <div class="questions">
+                        <h3>Question-wise Analysis</h3>
+                        ${questions.map(q => {
+                            let statusClass = q.attempted ? (q.correct ? 'correct' : 'incorrect') : 'not-attempted';
+                            let statusText = q.attempted ? 
+                                (q.correct ? 
+                                    `✅ Correct (+${q.earnedMarks.toFixed(2)})` : 
+                                    `❌ Incorrect (-${q.negativeMarks.toFixed(2)})`) : 
+                                '⚪ Not Attempted (0.00)';
+                            
+                            return `
+                                <div class="question ${statusClass}">
+                                    <p><strong>Question ${q.questionNo}</strong> (ID: ${q.questionId})</p>
+                                    <p>Your Answer: ${q.attempted ? q.chosen : 'Not attempted'} | Correct Answer: ${CORRECT_ANSWERS[q.questionId] || 'Unknown'}</p>
+                                    <p>Status: ${statusText} | Question Value: ${q.marks.toFixed(2)}</p>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
 
             } catch (error) {
                 output.innerHTML = `
