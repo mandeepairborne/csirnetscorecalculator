@@ -65,46 +65,60 @@
                 };
 
                 // Extract questions with improved selector
-                const questions = Array.from(doc.querySelectorAll('table.legend-table')).map(table => {
-                    const header = table.querySelector('.legend-text strong')?.textContent.trim() || '';
-                    const [_, questionNo, questionId] = header.match(/Question No\. (\d+).*?Question ID (\d+)/) || [];
-                    
-                    const chosenOption = table.querySelector('input[checked]')
-                        ?.closest('tr')
-                        ?.querySelector('span:first-child')
-                        ?.textContent
-                        ?.replace('(Chosen Option)', '')
-                        ?.trim();
+                
+    // Improved question parsing
+    const questions = Array.from(doc.querySelectorAll('table.legend-table')).map(table => {
+        const header = table.querySelector('.legend-text')?.textContent.trim() || '';
+        
+        // Extract question number and ID using more robust method
+        const [questionPart, idPart] = header.split('/').map(s => s.replace(/\D/g, '').trim());
+        const questionNo = questionPart?.replace('QuestionNo', '') || 'N/A';
+        const questionId = idPart?.replace('QuestionID', '') || 'N/A';
 
-                    return {
-                        questionNo: questionNo || 'N/A',
-                        questionId: questionId || 'N/A',
-                        chosen: chosenOption || 'Not attempted'
-                    };
-                }).filter(q => q.questionNo);
+        // Check for actual attempt
+        const chosenOption = table.querySelector('input[type="radio"][checked]')
+            ?.closest('tr')
+            ?.querySelector('span:first-child')
+            ?.textContent
+            ?.replace('(Chosen Option)', '')
+            ?.trim();
 
-                // Display results
-                output.innerHTML = `
-                    <div class="student-info">
-                        <h2>Student Details</h2>
-                        <p><strong>Roll No:</strong> ${student.rollNo}</p>
-                        <p><strong>Registration No:</strong> ${student.regNo}</p>
-                        <p><strong>Name:</strong> ${student.name}</p>
-                        <p><strong>Module:</strong> ${student.module}</p>
-                        <p><strong>Exam Date:</strong> ${student.examDate}</p>
-                        <p><strong>Batch:</strong> ${student.batch}</p>
-                    </div>
+        return {
+            questionNo,
+            questionId,
+            chosen: chosenOption || 'Not attempted',
+            attempted: !!chosenOption
+        };
+    }).filter(q => q.questionNo && q.questionId !== 'N/A'); // Filter invalid entries
 
-                    <div class="questions">
-                        <h3>Attempted Questions (${questions.length})</h3>
-                        ${questions.map(q => `
-                            <div class="question">
-                                <p><strong>Question ${q.questionNo}</strong></p>
-                                <p>ID: ${q.questionId} | Chosen: ${q.chosen}</p>
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
+    // Calculate actual attempts
+    const attemptedQuestions = questions.filter(q => q.attempted);
+
+    // Display results
+    output.innerHTML = `
+        <div class="student-info">
+            <!-- Keep student details same -->
+        </div>
+
+        <div class="stats">
+            <h3>Exam Summary</h3>
+            <p>Total Questions: ${questions.length}</p>
+            <p>Attempted Questions: ${attemptedQuestions.length}</p>
+            <p>Unattempted Questions: ${questions.length - attemptedQuestions.length}</p>
+        </div>
+
+        <div class="questions">
+            <h3>Question-wise Analysis</h3>
+            ${attemptedQuestions.map(q => `
+                <div class="question">
+                    <p><strong>Question ${q.questionNo}</strong> (ID: ${q.questionId})</p>
+                    <p>Chosen Option: ${q.chosen}</p>
+                </div>
+            `).join('')}
+        </div>
+    `;
+
+    // ... rest of the code ...
 
             } catch (error) {
                 output.innerHTML = `
