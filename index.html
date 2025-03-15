@@ -4,273 +4,39 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Response Analyzer</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .container { max-width: 1000px; margin: 0 auto; }
-        input[type="text"] { width: 400px; padding: 8px; margin-right: 10px; }
-        button { padding: 8px 16px; background: #007bff; color: white; border: none; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        .student-info { margin-top: 20px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
-        .stats { margin-top: 20px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; }
-        .questions { margin-top: 20px; }
-        .question { margin-bottom: 15px; padding: 15px; border: 1px solid #eee; border-radius: 5px; }
-        .correct { border-left: 4px solid #28a745; }
-        .incorrect { border-left: 4px solid #dc3545; }
-        .not-attempted { border-left: 4px solid #6c757d; }
-        img { max-width: 100px; margin: 10px; border: 1px solid #ccc; }
-        .error { color: red; margin-top: 10px; padding: 15px; border: 1px solid #ffcccc; background-color: #fff8f8; border-radius: 5px; }
-        .summary-box { display: inline-block; padding: 10px 20px; margin: 5px; border-radius: 5px; color: white; }
-        .positive { background-color: #28a745; }
-        .negative { background-color: #dc3545; }
-        .total { background-color: #17a2b8; }
-    </style>
+    <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="theme-transition">
     <div class="container">
-        <h1>Student Response Analyzer</h1>
+        <div id="nav-bar">
+            <button id="theme-toggle" class="theme-toggle" title="Toggle dark/light mode">
+                <svg class="icons" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+            </button>
+        </div>
+
+        <h1><span class="accent-data">Student Response Analyzer</span></h1>
         <input type="text" id="urlInput" 
                placeholder="Enter response sheet URL"
                value="https://example.com/response-sheet.html">
         <button onclick="fetchDetails()">Analyze</button>
         <div id="output"></div>
+
+        <div id="footer-container">
+            <div>Made with ❤️ by Mandeep</div>
+            <div>© 2025 - All Rights Reserved</div>
+        </div>
     </div>
 
-    <script>
-const CORRECT_ANSWERS = {
-"705101": "2",
-"705102": "4",
-"705103": "4",
-"705104": "1",
-"705105": "1",
-"705106": "2",
-"705107": "4",
-"705108": "2",
-"705109": "4",
-"705110": "1",
-"705111": "2",
-"705112": "3",
-"705113": "4",
-"705114": "1",
-"705115": "2",
-"705116": "4",
-"705117": "4",
-"705118": "2",
-"705119": "2",
-"705120": "2",
-"705121": "4",
-"705122": "3",
-"705123": "3",
-"705124": "2",
-"705125": "1",
-"705126": "2",
-"705127": "2",
-"705128": "3",
-"705129": "3",
-"705130": "2",
-"705131": "3",
-"705132": "1",
-"705133": "2",
-"705134": "2",
-"705135": "1",
-"705136": "3",
-"705137": "3",
-"705138": "4",
-"705139": "2",
-"705140": "4",
-"705141": "2",
-"705142": "2",
-"705143": "3",
-"705144": "4",
-"705145": "1",
-"705146": "4",
-"705147": "2",
-"705148": "1",
-"705149": "4",
-"705150": "3",
-"705151": "1",
-"705152": "4",
-"705153": "1",
-"705154": "1",
-"705155": "3",
-"705156": "4",
-"705157": "4",
-"705158": "3",
-"705159": "4",
-"705160": "4",
-"705161": "2",
-"705162": "4",
-"705163": "1",
-"705164": "4",
-"705165": "3",
-"705166": "3",
-"705167": "1",
-"705168": "1",
-"705169": "4",
-"705170": "1",
-"705171": "2",
-"705172": "4",
-"705173": "2",
-"705174": "1",
-"705175": "2"
-};
-        
-        async function fetchDetails() {
-            const url = document.getElementById('urlInput').value;
-            const output = document.getElementById('output');
-            output.innerHTML = 'Loading...';
-
-            try {
-                // Use CORS proxy with activation
-                const proxy = 'https://cors-anywhere.herokuapp.com/';
-                const response = await fetch(proxy + url, {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                });
-                
-                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-                
-                const html = await response.text();
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-
-                // Extract student details with precise selectors
-                const extractDetail = (label) => {
-                    const regex = new RegExp(`${label}[\\s:]*([^\\n]+)`, 'i');
-                    const mainTable = doc.querySelector('table[width="90%"]');
-                    const match = mainTable.textContent.match(regex);
-                    return match ? match[1].trim() : 'N/A';
-                };
-
-                const student = {
-                    rollNo: extractDetail('Roll No'),
-                    regNo: extractDetail('Registration No'),
-                    name: extractDetail('Candidate Name'),
-                    module: extractDetail('Module Name'),
-                    examDate: extractDetail('Exam Date'),
-                    batch: extractDetail('Exam Batch')
-                };
-
-                // Improved question parsing
-                const questions = Array.from(doc.querySelectorAll('table.legend-table')).map(table => {
-                    const header = table.querySelector('.legend-text')?.textContent.trim() || '';
-                    const marksText = table.querySelector('.legend-text + td')?.textContent.match(/[\d.]+/)?.[0] || '0';
-                    
-                    // Extract question number and ID
-                    const [questionPart, idPart] = header.split('/').map(s => s.replace(/\D/g, '').trim());
-                    const questionId = idPart || 'N/A';
-
-                    // Get chosen answer
-                    const chosenOption = table.querySelector('input[type="radio"][checked]')
-                        ?.closest('tr')
-                        ?.querySelector('span:first-child')
-                        ?.textContent
-                        ?.replace(/\D/g, '') // Extract only numbers
-                        ?.trim();
-
-                    // Check correctness
-                    const correctAnswer = CORRECT_ANSWERS[questionId];
-                    const isCorrect = chosenOption === correctAnswer;
-                    const isAttempted = !!chosenOption;
-                    const marks = parseFloat(marksText) || 0;
-                    
-                    // Calculate negative marking (1/4 of the question marks for incorrect answers)
-                    let earnedMarks = 0;
-                    let negativeMarks = 0;
-                    
-                    if (isAttempted) {
-                        if (isCorrect) {
-                            earnedMarks = marks;
-                        } else {
-                            negativeMarks = marks * 0.25; // 1/4 negative marking
-                        }
-                    }
-
-                    return {
-                        questionNo: questionPart?.replace('QuestionNo', '') || 'N/A',
-                        questionId,
-                        chosen: chosenOption || 'Not attempted',
-                        correct: isCorrect,
-                        marks,
-                        attempted: isAttempted,
-                        earnedMarks,
-                        negativeMarks
-                    };
-                }).filter(q => q.questionId !== 'N/A');
-
-                // Calculate scores
-                const attemptedQuestions = questions.filter(q => q.attempted);
-                const correctQuestions = questions.filter(q => q.attempted && q.correct);
-                const incorrectQuestions = questions.filter(q => q.attempted && !q.correct);
-                const notAttemptedQuestions = questions.filter(q => !q.attempted);
-                
-                const positiveMarks = correctQuestions.reduce((sum, q) => sum + q.earnedMarks, 0);
-                const negativeMarks = incorrectQuestions.reduce((sum, q) => sum + q.negativeMarks, 0);
-                const totalMarks = positiveMarks - negativeMarks;
-
-                // Display results
-                output.innerHTML = `
-                    <div class="student-info">
-                        <h2>Student Details</h2>
-                        <p><strong>Roll No:</strong> ${student.rollNo}</p>
-                        <p><strong>Registration No:</strong> ${student.regNo}</p>
-                        <p><strong>Name:</strong> ${student.name}</p>
-                        <p><strong>Module:</strong> ${student.module}</p>
-                        <p><strong>Exam Date:</strong> ${student.examDate}</p>
-                        <p><strong>Batch:</strong> ${student.batch}</p>
-                    </div>
-                    
-                    <div class="stats">
-                        <h3>Exam Summary</h3>
-                        <p>Total Questions: ${questions.length}</p>
-                        <p>Attempted: ${attemptedQuestions.length}</p>
-                        <p>Correct Answers: ${correctQuestions.length}</p>
-                        <p>Incorrect Answers: ${incorrectQuestions.length}</p>
-                        <p>Not Attempted: ${notAttemptedQuestions.length}</p>
-                        <div>
-                            <span class="summary-box positive">Positive Marks: +${positiveMarks.toFixed(2)}</span>
-                            <span class="summary-box negative">Negative Marks: -${negativeMarks.toFixed(2)}</span>
-                            <span class="summary-box total">Total Score: ${totalMarks.toFixed(2)}</span>
-                        </div>
-                    </div>
-
-                    <div class="questions">
-                        <h3>Question-wise Analysis</h3>
-                        ${questions.map(q => {
-                            let statusClass = q.attempted ? (q.correct ? 'correct' : 'incorrect') : 'not-attempted';
-                            let statusText = q.attempted ? 
-                                (q.correct ? 
-                                    `✅ Correct (+${q.earnedMarks.toFixed(2)})` : 
-                                    `❌ Incorrect (-${q.negativeMarks.toFixed(2)})`) : 
-                                '⚪ Not Attempted (0.00)';
-                            
-                            return `
-                                <div class="question ${statusClass}">
-                                    <p><strong>Question ${q.questionNo}</strong> (ID: ${q.questionId})</p>
-                                    <p>Your Answer: ${q.attempted ? q.chosen : 'Not attempted'} | Correct Answer: ${CORRECT_ANSWERS[q.questionId] || 'Unknown'}</p>
-                                    <p>Status: ${statusText} | Question Value: ${q.marks.toFixed(2)}</p>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                `;
-
-            } catch (error) {
-                output.innerHTML = `
-                    <div class="error">
-                        <h3>Error</h3>
-                        <p>${error.message}</p>
-                        <p>Possible fixes:</p>
-                        <ul>
-                            <li>Enable CORS proxy at <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank">cors-anywhere demo</a></li>
-                            <li>Check URL validity</li>
-                            <li>Verify response sheet structure</li>
-                        </ul>
-                    </div>
-                `;
-                console.error('Error details:', error);
-            }
-        }
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
