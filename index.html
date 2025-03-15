@@ -1,100 +1,134 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>CSIR-NET Debugger</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Response Fetcher</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
-        pre { background: #f0f0f0; padding: 10px; overflow-x: auto; }
-        .step { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+        .container { max-width: 800px; margin: 0 auto; }
+        input[type="text"] { width: 400px; padding: 8px; }
+        button { padding: 8px 16px; background: #007bff; color: white; border: none; cursor: pointer; }
+        .student-info { margin-top: 20px; padding: 20px; border: 1px solid #ddd; }
+        .questions { margin-top: 20px; }
+        .question { margin-bottom: 15px; padding: 10px; border: 1px solid #eee; }
+        img { max-width: 100px; margin: 10px; border: 1px solid #ccc; }
     </style>
 </head>
 <body>
-    <input type="text" id="url" placeholder="Paste URL here" style="width: 500px;">
-    <button onclick="startDebug()">Start Debug</button>
-    <div id="debugOutput"></div>
+    <div class="container">
+        <h1>Student Response Sheet Fetcher</h1>
+        <input type="text" id="urlInput" placeholder="Enter response sheet URL">
+        <button onclick="fetchDetails()">Fetch Details</button>
+        <div id="output"></div>
+    </div>
 
     <script>
-        async function startDebug() {
-            const url = document.getElementById('url').value;
-            const output = document.getElementById('debugOutput');
-            output.innerHTML = '<div class="step">Starting debug...</div>';
+        async function fetchDetails() {
+            const url = document.getElementById('urlInput').value;
+            if (!url) {
+                alert('Please enter a URL');
+                return;
+            }
 
             try {
-                // Step 1: Test basic fetch
-                let response;
-                try {
-                    output.innerHTML += '<div class="step">[1/5] Fetching URL...</div>';
-                    response = await fetch(`https://cors-anywhere.herokuapp.com/${url}`);
-                    output.innerHTML += `<div class="step">[1/5] Success! Status: ${response.status}</div>`;
-                } catch (fetchError) {
-                    throw new Error(`Fetch failed: ${fetchError.message}`);
-                }
-
-                // Step 2: Test HTML parsing
-                output.innerHTML += '<div class="step">[2/5] Parsing HTML...</div>';
-                const html = await response.text();
+                const response = await fetch(url);
+                const htmlText = await response.text();
                 const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                
-                // Verify basic document structure
-                if (!doc.body || !doc.querySelector('body')) {
-                    throw new Error('Invalid HTML structure');
-                }
-                output.innerHTML += '<div class="step">[2/5] HTML parsed successfully</div>';
+                const doc = parser.parseFromString(htmlText, 'text/html');
 
-                // Step 3: Extract candidate details
-                output.innerHTML += '<div class="step">[3/5] Extracting candidate details...</div>';
-                const allTds = Array.from(doc.querySelectorAll('td'));
-                const details = {
-                    rollNo: allTds.find(td => td.textContent.includes('Roll No'))?.nextElementSibling?.textContent,
-                    name: allTds.find(td => td.textContent.includes('Candidate Name'))?.nextElementSibling?.textContent
+                // Extract student details
+                const getDetail = (label) => {
+                    const tds = Array.from(doc.querySelectorAll('td'));
+                    const td = tds.find(el => el.textContent.trim() === label);
+                    if (!td) return 'Not found';
+                    const row = td.closest('tr');
+                    const valueTd = row.querySelector('td:nth-child(2)');
+                    return valueTd ? valueTd.textContent.trim() : 'Not found';
                 };
-                
-                output.innerHTML += `
-                    <div class="step">[3/5] Candidate Details:
-                    <pre>${JSON.stringify(details, null, 2)}</pre>
-                    </div>
-                `;
 
-                // Step 4: Test question parsing
-                output.innerHTML += '<div class="step">[4/5] Testing question parsing...</div>';
-                const firstQuestion = doc.querySelector('input[type="radio"]:checked');
-                
-                if (!firstQuestion) {
-                    throw new Error('No answered questions found');
-                }
-                
-                const questionData = {
-                    qid: firstQuestion.closest('table')?.querySelector('td')?.textContent?.match(/\d+/)?.[0],
-                    answer: firstQuestion.previousElementSibling?.textContent?.trim()
+                const studentDetails = {
+                    rollNo: getDetail('Roll No'),
+                    regNo: getDetail('Registration No'),
+                    name: getDetail('Candidate Name'),
+                    module: getDetail('Module Name'),
+                    examDate: getDetail('Exam Date'),
+                    batch: getDetail('Exam Batch')
                 };
-                
-                output.innerHTML += `
-                    <div class="step">[4/5] First Question Analysis:
-                    <pre>${JSON.stringify(questionData, null, 2)}</pre>
-                    </div>
-                `;
 
-                // Step 5: Full parsing test
-                output.innerHTML += '<div class="step">[5/5] Testing full parsing...</div>';
-                const questions = Array.from(doc.querySelectorAll('input[type="radio"]:checked'));
-                output.innerHTML += `
-                    <div class="step">[5/5] Found ${questions.length} answered questions
-                    <pre>First 3 questions: ${JSON.stringify(questions.slice(0,3).map(q => ({
-                        qid: q.closest('table')?.querySelector('td')?.textContent?.match(/\d+/)?.[0],
-                        answer: q.previousElementSibling?.textContent?.trim()
-                    })), null, 2)}</pre>
-                    </div>
-                `;
+                // Extract images
+                const images = Array.from(doc.querySelectorAll('table.top-viewQP img'));
+                const baseUrl = new URL(url);
+                const resolveUrl = (relativePath) => new URL(relativePath, baseUrl).href;
+                
+                const studentImages = {
+                    registeredPhoto: images[0] ? resolveUrl(images[0].getAttribute('src')) : '',
+                    examDayPhoto: images[1] ? resolveUrl(images[1].getAttribute('src')) : ''
+                };
+
+                // Extract questions
+                const fieldsets = Array.from(doc.querySelectorAll('fieldset'));
+                const questions = fieldsets.map(fieldset => {
+                    const legendTd = fieldset.querySelector('.legend-text');
+                    if (!legendTd) return null;
+
+                    const questionText = legendTd.textContent.trim();
+                    const [questionNoPart, questionIdPart] = questionText.split('/');
+                    
+                    return {
+                        questionNo: questionNoPart.replace('Question No.', '').trim(),
+                        questionId: questionIdPart.replace('Question ID', '').trim(),
+                        marks: legendTd.nextElementSibling.textContent.replace('Marks:', '').trim(),
+                        chosenOption: getChosenOption(fieldset)
+                    };
+                }).filter(q => q !== null);
+
+                // Display results
+                displayResults(studentDetails, studentImages, questions);
 
             } catch (error) {
-                output.innerHTML += `
-                    <div class="step" style="color:red;">
-                    Error at step: ${error.message}
-                    <pre>${error.stack}</pre>
-                    </div>
-                `;
+                console.error('Error:', error);
+                document.getElementById('output').innerHTML = 'Error fetching details. Check console for more information.';
             }
+        }
+
+        function getChosenOption(fieldset) {
+            const checkedInput = fieldset.querySelector('input[type="radio"][checked]');
+            if (!checkedInput) return 'Not found';
+            
+            const optionRow = checkedInput.closest('tr');
+            const optionText = optionRow.querySelector('td:nth-child(3) span:first-child');
+            return optionText ? optionText.textContent.trim() : 'Not found';
+        }
+
+        function displayResults(details, images, questions) {
+            const output = document.getElementById('output');
+            output.innerHTML = `
+                <div class="student-info">
+                    <h2>Student Details</h2>
+                    <p><strong>Roll No:</strong> ${details.rollNo}</p>
+                    <p><strong>Registration No:</strong> ${details.regNo}</p>
+                    <p><strong>Name:</strong> ${details.name}</p>
+                    <p><strong>Module:</strong> ${details.module}</p>
+                    <p><strong>Exam Date:</strong> ${details.examDate}</p>
+                    <p><strong>Batch:</strong> ${details.batch}</p>
+                    <div>
+                        ${images.registeredPhoto ? `<img src="${images.registeredPhoto}" alt="Registered Photo">` : ''}
+                        ${images.examDayPhoto ? `<img src="${images.examDayPhoto}" alt="Exam Day Photo">` : ''}
+                    </div>
+                </div>
+
+                <div class="questions">
+                    <h3>Questions Attempted</h3>
+                    ${questions.map(q => `
+                        <div class="question">
+                            <p><strong>Question ${q.questionNo}</strong> (ID: ${q.questionId})</p>
+                            <p>Marks: ${q.marks}</p>
+                            <p>Chosen Option: ${q.chosenOption}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
         }
     </script>
 </body>
