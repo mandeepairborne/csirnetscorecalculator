@@ -110,7 +110,7 @@ async function fetchDetails() {
 
     try {
         // Use CORS proxy with activation
-        const proxy = 'https://cors-anywhere.herokuapp.com/';
+        const proxy = 'https://crossorigin.me/';
         const response = await fetch(proxy + url, {
             headers: {
                 'X-Requested-With': 'XMLHttpRequest'
