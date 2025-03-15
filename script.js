@@ -294,9 +294,10 @@ function displayError(error) {
             <p>${error.message}</p>
             <p>Possible fixes:</p>
             <ul>
-                <li>Ohh! not again, CORS seems to not work properly" target="_blank">cors-anywhere demo</a></li>
-                <li>Check URL validity</li>
-                <li>Verify response sheet structure</li>
+                <li>You have to enter the application number mentioned in the admit card. Rechecked !?</a></li>
+                <li>This tool is valid for CSIR NET DEC PHYSICS 2024 only.</li>
+                <li>Allorigins may have encountered some problem. Make you have rectified above mentioned errors.</li>
+                
             </ul>
         </div>
     `;
