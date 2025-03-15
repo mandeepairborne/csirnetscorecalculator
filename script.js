@@ -101,7 +101,6 @@ function initThemeToggle() {
         localStorage.setItem('theme', newTheme);
     });
 }
-const CORS_PROXY = "https://handler-cors.vercel.app/fetch";
 // Main function to fetch and analyze response sheet
 async function fetchDetails() {
     const url = document.getElementById('urlInput').value;
@@ -109,29 +108,15 @@ async function fetchDetails() {
     output.innerHTML = 'Loading...';
 
     try {
-        // Use the CORS proxy
-        const response = await fetch(CORS_PROXY, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                url: url
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`Proxy error: ${response.status} ${response.statusText}`);
-        }
-
-        const result = await response.json();
+        // Use AllOrigins proxy instead of CORS Anywhere
+        const allOriginsUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        const response = await fetch(allOriginsUrl);
         
-        // Check if proxy returned valid content
-        if (!result.body) throw new Error('Invalid response from proxy server');
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
         
-        // Parse the HTML
+        const html = await response.text();
         const parser = new DOMParser();
-        const doc = parser.parseFromString(result.body, 'text/html');
+        const doc = parser.parseFromString(html, 'text/html');
 
         // Extract student details
         const student = extractStudentInfo(doc);
