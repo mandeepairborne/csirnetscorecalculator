@@ -5,20 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Response Fetcher</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        input[type="text"] { width: 400px; padding: 8px; }
-        button { padding: 8px 16px; background: #007bff; color: white; border: none; cursor: pointer; }
-        .student-info { margin-top: 20px; padding: 20px; border: 1px solid #ddd; }
-        .questions { margin-top: 20px; }
-        .question { margin-bottom: 15px; padding: 10px; border: 1px solid #eee; }
-        img { max-width: 100px; margin: 10px; border: 1px solid #ccc; }
+        /* ... (keep previous styles) ... */
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Student Response Sheet Fetcher</h1>
-        <input type="text" id="urlInput" placeholder="Enter response sheet URL">
+        <input type="text" id="urlInput" 
+               placeholder="Enter response sheet URL"
+               value="https://example.com/response-sheet.html">
         <button onclick="fetchDetails()">Fetch Details</button>
         <div id="output"></div>
     </div>
@@ -26,25 +21,30 @@
     <script>
         async function fetchDetails() {
             const url = document.getElementById('urlInput').value;
-            if (!url) {
-                alert('Please enter a URL');
-                return;
-            }
+            const output = document.getElementById('output');
+            output.innerHTML = 'Loading...';
 
             try {
-                const response = await fetch(url);
+                // Use CORS proxy to bypass restrictions
+                const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+                const response = await fetch(proxyUrl + url);
+                
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                
                 const htmlText = await response.text();
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(htmlText, 'text/html');
 
-                // Extract student details
+                // Improved detail extraction
                 const getDetail = (label) => {
-                    const tds = Array.from(doc.querySelectorAll('td'));
-                    const td = tds.find(el => el.textContent.trim() === label);
-                    if (!td) return 'Not found';
-                    const row = td.closest('tr');
-                    const valueTd = row.querySelector('td:nth-child(2)');
-                    return valueTd ? valueTd.textContent.trim() : 'Not found';
+                    const cells = Array.from(doc.querySelectorAll('td'));
+                    const cell = cells.find(td => 
+                        td.textContent.trim().startsWith(label)
+                    );
+                    
+                    if (!cell) return 'Not found';
+                    const valueCell = cell.closest('tr').querySelector('td:last-child');
+                    return valueCell ? valueCell.textContent.trim() : 'Not found';
                 };
 
                 const studentDetails = {
@@ -56,52 +56,42 @@
                     batch: getDetail('Exam Batch')
                 };
 
-                // Extract images
-                const images = Array.from(doc.querySelectorAll('table.top-viewQP img'));
-                const baseUrl = new URL(url);
-                const resolveUrl = (relativePath) => new URL(relativePath, baseUrl).href;
-                
-                const studentImages = {
-                    registeredPhoto: images[0] ? resolveUrl(images[0].getAttribute('src')) : '',
-                    examDayPhoto: images[1] ? resolveUrl(images[1].getAttribute('src')) : ''
+                // Image handling
+                const getImage = (index) => {
+                    const img = doc.querySelectorAll('table.top-viewQP img')[index];
+                    if (!img) return null;
+                    const src = img.getAttribute('src');
+                    return new URL(src, url).href;
                 };
 
-                // Extract questions
-                const fieldsets = Array.from(doc.querySelectorAll('fieldset'));
-                const questions = fieldsets.map(fieldset => {
-                    const legendTd = fieldset.querySelector('.legend-text');
-                    if (!legendTd) return null;
-
-                    const questionText = legendTd.textContent.trim();
-                    const [questionNoPart, questionIdPart] = questionText.split('/');
+                // Question parsing
+                const questions = Array.from(doc.querySelectorAll('fieldset')).map(fieldset => {
+                    const header = fieldset.querySelector('.legend-text');
+                    if (!header) return null;
+                    
+                    const [questionNo, questionId] = header.textContent
+                        .split('/')
+                        .map(s => s.replace(/\D/g, '').trim());
                     
                     return {
-                        questionNo: questionNoPart.replace('Question No.', '').trim(),
-                        questionId: questionIdPart.replace('Question ID', '').trim(),
-                        marks: legendTd.nextElementSibling.textContent.replace('Marks:', '').trim(),
-                        chosenOption: getChosenOption(fieldset)
+                        questionNo,
+                        questionId,
+                        chosenOption: fieldset.querySelector('[checked]')
+                            ?.closest('tr')
+                            ?.querySelector('span')
+                            ?.textContent || 'Not found'
                     };
-                }).filter(q => q !== null);
+                }).filter(q => q);
 
-                // Display results
-                displayResults(studentDetails, studentImages, questions);
+                displayResults(studentDetails, getImage, questions);
 
             } catch (error) {
-                console.error('Error:', error);
-                document.getElementById('output').innerHTML = 'Error fetching details. Check console for more information.';
+                console.error('Fetch error:', error);
+                output.innerHTML = `Error: ${error.message}`;
             }
         }
 
-        function getChosenOption(fieldset) {
-            const checkedInput = fieldset.querySelector('input[type="radio"][checked]');
-            if (!checkedInput) return 'Not found';
-            
-            const optionRow = checkedInput.closest('tr');
-            const optionText = optionRow.querySelector('td:nth-child(3) span:first-child');
-            return optionText ? optionText.textContent.trim() : 'Not found';
-        }
-
-        function displayResults(details, images, questions) {
+        function displayResults(details, getImage, questions) {
             const output = document.getElementById('output');
             output.innerHTML = `
                 <div class="student-info">
@@ -113,18 +103,18 @@
                     <p><strong>Exam Date:</strong> ${details.examDate}</p>
                     <p><strong>Batch:</strong> ${details.batch}</p>
                     <div>
-                        ${images.registeredPhoto ? `<img src="${images.registeredPhoto}" alt="Registered Photo">` : ''}
-                        ${images.examDayPhoto ? `<img src="${images.examDayPhoto}" alt="Exam Day Photo">` : ''}
+                        ${getImage(0) ? `<img src="${getImage(0)}" alt="Registered Photo">` : ''}
+                        ${getImage(1) ? `<img src="${getImage(1)}" alt="Exam Day Photo">` : ''}
                     </div>
                 </div>
 
                 <div class="questions">
-                    <h3>Questions Attempted</h3>
+                    <h3>Attempted Questions (${questions.length})</h3>
                     ${questions.map(q => `
                         <div class="question">
-                            <p><strong>Question ${q.questionNo}</strong> (ID: ${q.questionId})</p>
-                            <p>Marks: ${q.marks}</p>
-                            <p>Chosen Option: ${q.chosenOption}</p>
+                            <p><strong>Q${q.questionNo}</strong> 
+                            (ID: ${q.questionId})</p>
+                            <p>Selected: ${q.chosenOption}</p>
                         </div>
                     `).join('')}
                 </div>
