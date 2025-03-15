@@ -120,6 +120,169 @@
                 </div>
             `;
         }
+
+        
+// Add the correct answers object
+const CORRECT_ANSWERS = {
+    "705101": "2",
+    "705102": "4",
+    "705103": "4",
+    "705104": "1",
+    "705105": "1",
+    "705106": "2",
+    "705107": "4",
+    "705108": "2",
+    "705109": "4",
+    "705110": "1",
+    "705111": "2",
+    "705112": "3",
+    "705113": "4",
+    "705114": "1",
+    "705115": "2",
+    "705116": "4",
+    "705117": "4",
+    "705118": "2",
+    "705119": "2",
+    "705120": "2",
+    "705121": "4",
+    "705122": "3",
+    "705123": "3",
+    "705124": "2",
+    "705125": "1",
+    "705126": "2",
+    "705127": "2",
+    "705128": "3",
+    "705129": "3",
+    "705130": "2",
+    "705131": "3",
+    "705132": "1",
+    "705133": "2",
+    "705134": "2",
+    "705135": "1",
+    "705136": "3",
+    "705137": "3",
+    "705138": "4",
+    "705139": "2",
+    "705140": "4",
+    "705141": "2",
+    "705142": "2",
+    "705143": "3",
+    "705144": "4",
+    "705145": "1",
+    "705146": "4",
+    "705147": "2",
+    "705148": "1",
+    "705149": "4",
+    "705150": "3",
+    "705151": "1",
+    "705152": "4",
+    "705153": "1",
+    "705154": "1",
+    "705155": "3",
+    "705156": "4",
+    "705157": "4",
+    "705158": "3",
+    "705159": "4",
+    "705160": "4",
+    "705161": "2",
+    "705162": "4",
+    "705163": "1",
+    "705164": "4",
+    "705165": "3",
+    "705166": "3",
+    "705167": "1",
+    "705168": "1",
+    "705169": "4",
+    "705170": "1",
+    "705171": "2",
+    "705172": "4",
+    "705173": "2",
+    "705174": "1",
+    "705175": "2"
+};
+
+async function fetchDetails() {
+    // ... (previous fetch code remains the same until question extraction) ...
+
+    // Calculate scores
+    const scoreDetails = {
+        twoMarks: { correct: 0, incorrect: 0, total: 0 },
+        threeHalfMarks: { correct: 0, incorrect: 0, total: 0 },
+        fiveMarks: { correct: 0, incorrect: 0, total: 0 }
+    };
+
+    questions.forEach(q => {
+        if (!CORRECT_ANSWERS.hasOwnProperty(q.questionId)) return;
+
+        const correctAnswer = CORRECT_ANSWERS[q.questionId];
+        const isCorrect = q.chosenOption === correctAnswer;
+        const isAttempted = q.chosenOption !== 'Not found';
+
+        let marks = 0;
+        if (q.questionId >= 705101 && q.questionId <= 705120) {
+            marks = 2;
+            handleMarks(scoreDetails.twoMarks, isCorrect, isAttempted, marks);
+        } else if (q.questionId >= 705121 && q.questionId <= 705145) {
+            marks = 3.5;
+            handleMarks(scoreDetails.threeHalfMarks, isCorrect, isAttempted, marks);
+        } else if (q.questionId >= 705146 && q.questionId <= 705175) {
+            marks = 5;
+            handleMarks(scoreDetails.fiveMarks, isCorrect, isAttempted, marks);
+        }
+    });
+
+    // Calculate totals
+    const totalScore = [
+        scoreDetails.twoMarks.total,
+        scoreDetails.threeHalfMarks.total,
+        scoreDetails.fiveMarks.total
+    ].reduce((a, b) => a + b, 0);
+
+    // Display results with score
+    displayResults(studentDetails, getImage, questions, scoreDetails, totalScore);
+}
+
+function handleMarks(category, isCorrect, isAttempted, marks) {
+    if (!isAttempted) return;
+    
+    if (isCorrect) {
+        category.correct++;
+        category.total += marks;
+    } else {
+        category.incorrect++;
+        category.total -= marks/4;
+    }
+}
+
+function displayResults(details, getImage, questions, scores, total) {
+    const output = document.getElementById('output');
+    output.innerHTML = `
+        <!-- Previous student info display remains same -->
+        
+        <div class="score-summary">
+            <h3>Exam Score: ${total.toFixed(2)}</h3>
+            <h4>Breakdown:</h4>
+            <p>2 Marks Questions:
+                Correct: ${scores.twoMarks.correct},
+                Incorrect: ${scores.twoMarks.incorrect},
+                Score: ${scores.twoMarks.total.toFixed(2)}
+            </p>
+            <p>3.5 Marks Questions:
+                Correct: ${scores.threeHalfMarks.correct},
+                Incorrect: ${scores.threeHalfMarks.incorrect},
+                Score: ${scores.threeHalfMarks.total.toFixed(2)}
+            </p>
+            <p>5 Marks Questions:
+                Correct: ${scores.fiveMarks.correct},
+                Incorrect: ${scores.fiveMarks.incorrect},
+                Score: ${scores.fiveMarks.total.toFixed(2)}
+            </p>
+        </div>
+
+        <!-- Questions display remains same -->
+    `;
+}
+
     </script>
 </body>
 </html>
