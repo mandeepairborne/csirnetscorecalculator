@@ -103,21 +103,28 @@ function initThemeToggle() {
 }
 // Main function to fetch and analyze response sheet
 async function fetchDetails() {
-    const url = document.getElementById('urlInput').value;
+    const rollNo = document.getElementById('rollNoInput').value.trim();
     const output = document.getElementById('output');
     output.innerHTML = 'Loading...';
 
     try {
+        // Validate input
+        if (!rollNo) throw new Error('Please enter a valid roll number');
+        
+        // Construct URL from roll number
+        const url = `https://narm28csir12ugc54hdb.onlineregistrationform.org/NMCSIRUGC/02Mar2025/09001200/${rollNo}.html`;
+        
         // Use AllOrigins proxy instead of CORS Anywhere
         const allOriginsUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
         const response = await fetch(allOriginsUrl);
         
-        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+        if (!response.ok) throw new Error(`Invalid response for roll number ${rollNo}`);
         
         const html = await response.text();
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
 
+        // Rest of the code remains the same...
         // Extract student details
         const student = extractStudentInfo(doc);
 
@@ -287,7 +294,7 @@ function displayError(error) {
             <p>${error.message}</p>
             <p>Possible fixes:</p>
             <ul>
-                <li>Enable CORS proxy at <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank">cors-anywhere demo</a></li>
+                <li>Ohh! not again, CORS seems to not work properly" target="_blank">cors-anywhere demo</a></li>
                 <li>Check URL validity</li>
                 <li>Verify response sheet structure</li>
             </ul>
